@@ -13,58 +13,73 @@
             padding: 0;
             margin: 0;
             overflow: hidden;
+            background-color: #202020;
         }
 
         canvas {
-            background-color: #202020;
+            /* background-color: #202020; */
         }
     </style>
 </head>
 
 <body>
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" width="0" height="0"></canvas>
     <script>
         class Circle {
             constructor() {
                 const winH = window.innerHeight
                 const winW = window.innerWidth
+                const random = (max, min = 0) => Math.random() * (max - min) + min
 
-                this.radius = Math.random() * 30 + 10
+                const radiusList = [30, 40, 50]
+                this.radius = random(radiusList[Math.floor(random(radiusList.length))], 20)
+
                 this.site = {
-                    x: Math.random() * (winW - this.radius * 2) + this.radius,
-                    y: Math.random() * (winH - this.radius * 2) + this.radius,
+                    x: random(winW - this.radius, this.radius),
+                    y: random(winH - this.radius, winH / 3 * 2),
                 }
                 this.direction = {
-                    x: Math.random() * -0.1,
-                    y: Math.random() * -0.5 - 0.1,
+                    x: random(0, -0.1),
+                    y: random(-0.1, -0.6),
                 }
 
                 this.alpha = {
-                    val: 0,// Math.random() * 100
+                    val: 0,
                     times: 0,
-                    speed: Math.random() * 0.0004 + 0.0003,
-                    limit: 0.2
+                    timesLimit: 1,
+                    speed: random(0.0004, 0.0002),
+                    max: 0.2,
+                    min: 0
                 }
-                this.color = { r: 0, b: 0, g: 0 }
+                this.color = { r: 0, g: 0, b: 0 }
             }
             static get init() {
                 return new Circle()
             }
 
+            fade(type) {
+                const typeList = {
+                    in: () => this.alpha.val = this.alpha.min + this.alpha.speed,
+                    out: () => this.alpha.val = this.alpha.max + this.alpha.speed,
+                }
+
+                this.alpha.speed = -this.alpha.speed
+                typeList[type]()
+                this.alpha.times += 1
+
+                return this
+            }
+
+            /** 更新狀態 */
             update() {
                 this.alpha.val += this.alpha.speed
                 this.site.y += this.direction.y
 
-                if (this.alpha.val >= this.alpha.limit) {
-                    this.alpha.speed = -this.alpha.speed
-                    this.alpha.val = this.alpha.limit + this.alpha.speed
-                    this.alpha.times += 1
-                } else if (this.alpha.val <= 0) {
-                    this.alpha.speed = -this.alpha.speed
-                    this.alpha.val = this.alpha.speed
-                    this.alpha.times += 1
-                }
+                if (this.alpha.val >= this.alpha.max)
+                    this.fade("out")
 
+                if (this.alpha.val <= this.alpha.min)
+                    this.fade("in")
 
                 return this
             }
@@ -76,11 +91,12 @@
             }
             static init(canvas) { return new Draw(canvas) }
 
+            /** 清除 canvas 畫面 */
             clear() {
                 const ctx = this.canvas.getContext("2d")
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
 
-                return true
+                return this
             }
 
             /**
@@ -91,16 +107,14 @@
                 const ctx = this.canvas.getContext("2d")
 
                 ctx.beginPath()
-                const fs = `rgba(${255 - cir.color.r}, ${255 - cir.color.g}, ${255 - cir.color.b}, ${cir.alpha.val})`
-                ctx.fillStyle = fs
-                // console.log(fs)
+
+                ctx.fillStyle = `rgba(${255 - cir.color.r}, ${255 - cir.color.g}, ${255 - cir.color.b}, ${cir.alpha.val})`
                 // ctx.strokeStyle = `rgba(255, 255, 255, ${cir.alpha / 100})`
                 // ctx.lineWidth = 5
+
                 ctx.arc(cir.site.x, cir.site.y, cir.radius, 0, Math.PI * 2)
                 ctx.fill()
                 // ctx.stroke()
-
-                // console.log(cir.site.x, cir.site.y, cir.radius)
 
                 return true
             }
@@ -116,9 +130,19 @@
                 canvas.height = window.innerHeight
                 canvas.width = window.innerWidth
 
-                return new Contral(canvas)
+                return new Contral(canvas).resetSize()
             }
 
+            /** 令視窗尺寸改變時可以同步調整 canvas 的大小 */
+            resetSize() {
+                window.addEventListener("resize", () => {
+                    this.canvas.height = window.innerHeight
+                    this.canvas.width = window.innerWidth
+                })
+                return this
+            }
+
+            /** 增加圓圈進列表中 */
             addCircle(num) {
                 for (let i = 0; i < num; i += 1)
                     this.circles.push(Circle.init)
@@ -126,26 +150,31 @@
                 return this
             }
 
-            update() {
-                for (let i = 0; i < this.circles.length; i += 1) {
-                    const circle = this.circles[i].update()
-                    if (circle.alpha.times > 1) {
-                        this.circles.splice(i, 1)
-                        this.circles[i].update()
+            /** 更新所有 circles 列表中的圓圈，並刪除其中不合條件的 */
+            updateList() {
+                const updateCircle = idx => {
+                    const circle = this.circles[idx].update()
+                    if (circle.alpha.times > circle.alpha.timesLimit) {
+                        this.circles.splice(idx, 1)
+                        updateCircle(idx)
                     }
                 }
+                for (let i = 0; i < this.circles.length; i += 1)
+                    updateCircle(i)
 
                 return this
             }
 
-            draw() {
-                Draw.init(this.canvas).clear()
-                this.circles.map(circle => Draw.init(this.canvas).circle(circle))
+            /** 繪製所有 circles 列表中的圓圈 */
+            drawList() {
+                const draw = Draw.init(this.canvas).clear()
+                this.circles.map(circle => draw.circle(circle))
             }
 
+            /** 動畫循環 */
             loop() {
-                if (Math.random() > 0.985) this.addCircle(1)
-                this.update().draw()
+                if (Math.random() > 0.994) this.addCircle(1)
+                this.updateList().drawList()
                 window.requestAnimationFrame(this.loop.bind(this))
             }
         }
