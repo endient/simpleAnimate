@@ -30,10 +30,8 @@
                 const winH = window.innerHeight
                 const winW = window.innerWidth
                 const random = (max, min = 0) => Math.random() * (max - min) + min
-
                 const radiusList = [30, 40, 50]
                 this.radius = random(radiusList[Math.floor(random(radiusList.length))], 20)
-
                 this.site = {
                     x: random(winW - this.radius, this.radius),
                     y: random(winH - this.radius, winH / 3 * 2),
@@ -42,7 +40,6 @@
                     x: random(0, -0.1),
                     y: random(-0.1, -0.6),
                 }
-
                 this.alpha = {
                     val: 0,
                     times: 0,
@@ -56,83 +53,89 @@
             static get init() {
                 return new Circle()
             }
-
+            get Rgba() {
+                const { r, g, b } = this.color
+                const a = this.alpha.val
+                return `rgba(${255 - r}, ${255 - g}, ${255 - b}, ${a})`
+            }
+            get Site() {
+                const { x, y } = this.site
+                const r = this.radius
+                return { x, y, r }
+            }
+            get IsFadeTimesOver() {
+                const { times, timesLimit } = this.alpha
+                return times > timesLimit
+            }
+            /** 淡入淡出 */
             fade(type) {
                 const typeList = {
                     in: () => this.alpha.val = this.alpha.min + this.alpha.speed,
                     out: () => this.alpha.val = this.alpha.max + this.alpha.speed,
                 }
-
                 this.alpha.speed = -this.alpha.speed
                 typeList[type]()
                 this.alpha.times += 1
-
                 return this
             }
-
             /** 更新狀態 */
             update() {
                 this.alpha.val += this.alpha.speed
                 this.site.y += this.direction.y
-
                 if (this.alpha.val >= this.alpha.max)
                     this.fade("out")
-
                 if (this.alpha.val <= this.alpha.min)
                     this.fade("in")
-
                 return this
             }
         }
-
         class Draw {
             constructor(canvas) {
                 this.canvas = canvas
             }
             static init(canvas) { return new Draw(canvas) }
-
             /** 清除 canvas 畫面 */
             clear() {
                 const ctx = this.canvas.getContext("2d")
                 ctx.clearRect(0, 0, canvas.width, canvas.height)
-
                 return this
             }
-
             /**
              * 繪製圓圈
              * @param {Circle} cir 
              */
             circle(cir) {
                 const ctx = this.canvas.getContext("2d")
-
+                const rgba = cir.Rgba
+                const site = cir.Site
                 ctx.beginPath()
-
-                ctx.fillStyle = `rgba(${255 - cir.color.r}, ${255 - cir.color.g}, ${255 - cir.color.b}, ${cir.alpha.val})`
-                // ctx.strokeStyle = `rgba(255, 255, 255, ${cir.alpha / 100})`
+                ctx.fillStyle = rgba
+                // ctx.strokeStyle = rgba
                 // ctx.lineWidth = 5
-
-                ctx.arc(cir.site.x, cir.site.y, cir.radius, 0, Math.PI * 2)
+                ctx.arc(site.x, site.y, site.r, 0, Math.PI * 2)
                 ctx.fill()
                 // ctx.stroke()
-
                 return true
             }
         }
-
         class Contral {
             constructor(canvas) {
                 this.canvas = canvas
-                this.circles = []
+                /** 所有圓圈 */ this.circles = []
+                /** 產生新圓圈的機率 */ this.buildCircleRate = { rate: 0.992, num: 1 }
+                /** 動畫開關（關閉不會直接消失） */ this.animateSwitch = true
+                /** 直接中止 */ this.terminate = false
             }
             static get init() {
                 const canvas = document.getElementById("canvas")
                 canvas.height = window.innerHeight
                 canvas.width = window.innerWidth
-
                 return new Contral(canvas).resetSize()
             }
-
+            set Switch(bool) {
+                this.animateSwitch = !!bool
+                return this
+            }
             /** 令視窗尺寸改變時可以同步調整 canvas 的大小 */
             resetSize() {
                 window.addEventListener("resize", () => {
@@ -141,44 +144,42 @@
                 })
                 return this
             }
-
             /** 增加圓圈進列表中 */
             addCircle(num) {
                 for (let i = 0; i < num; i += 1)
                     this.circles.push(Circle.init)
-
                 return this
             }
-
             /** 更新所有 circles 列表中的圓圈，並刪除其中不合條件的 */
             updateList() {
                 const updateCircle = idx => {
-                    const circle = this.circles[idx].update()
-                    if (circle.alpha.times > circle.alpha.timesLimit) {
+                    const circle = this.circles[idx]
+                    if (!circle) return
+                    circle.update()
+                    if (circle.IsFadeTimesOver) {
                         this.circles.splice(idx, 1)
                         updateCircle(idx)
                     }
                 }
                 for (let i = 0; i < this.circles.length; i += 1)
                     updateCircle(i)
-
                 return this
             }
-
             /** 繪製所有 circles 列表中的圓圈 */
             drawList() {
                 const draw = Draw.init(this.canvas).clear()
                 this.circles.map(circle => draw.circle(circle))
             }
-
             /** 動畫循環 */
             loop() {
-                if (Math.random() > 0.994) this.addCircle(1)
+                const { rate, num } = this.buildCircleRate
+                if (this.animateSwitch && Math.random() > rate)
+                    this.addCircle(num)
                 this.updateList().drawList()
-                window.requestAnimationFrame(this.loop.bind(this))
+                if (!(this.terminate && (!this.animateSwitch && this.circles.length === 0)))
+                    window.requestAnimationFrame(this.loop.bind(this))
             }
         }
-
         Contral.init.loop()
     </script>
 </body>
