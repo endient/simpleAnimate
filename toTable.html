@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+
+<body>
+    <script>
+
+        const testObject = [
+            { k1: "v1", k2: "v2" },
+            { k1: "v3", k2: "v4" },
+            { k1: "v5", k2: "v6" },
+            { k1: "v7", k2: "v8" },
+            { k1: "v9", k2: "v10" },
+            { k1: "v11", k2: "v12" },
+            { k1: "v13", k2: "v14" },
+        ]
+
+        class ToTable {
+            constructor(originData) {
+                this._originData = originData
+                this._config = { table: {}, rows: {}, head: {}, data: {} }
+                this._heads = new Set()
+            }
+
+            static for(data = []) { return new ToTable(data) }
+
+            get setTableStyle() {
+                return this._setElementConfig("table")
+            }
+
+            get setRowsStyle() {
+                return this._setElementConfig("rows")
+            }
+
+            get setHeadStyle() {
+                return this._setElementConfig("head")
+            }
+
+            get setDataStyle() {
+                return this._setElementConfig("data")
+            }
+
+            _setElementConfig(type) {
+                return ({ id = "", className = "", ...otherAttr }) => {
+                    this._config[type] = { id, className, ...otherAttr }
+                    return this
+                }
+            }
+
+            _setTitle(key, ...keys) {
+                this._heads = new Set([...this._heads, key])
+                return keys.length > 0 ? this._setTitle(...keys) : this
+            }
+
+
+
+            _buildData(content) {
+                return this._buildElement("td")(this._config.data)(content)
+            }
+
+            _buildHead(content) {
+                return this._buildElement("th")(this._config.head)(content)
+            }
+
+            _buildRows(content) {
+                return this._buildElement("tr")(this._config.rows)(content)
+            }
+
+            _buildTable(content) {
+                return this._buildElement("table")(this._config.table)(content)
+            }
+
+            _buildElement(type) {
+                return attrs => content =>
+                    `<${type} ${this._attrsToString(attrs)}>` +
+                    content +
+                    `</${type}>`
+            }
+
+            _attrsToString(attrs) {
+                return Object.keys(attrs).map(key => `${key}='${attrs[key]}'`).join(" ")
+            }
+
+
+
+            get build() {
+                const self = this
+
+                const rows = [...self._originData]
+                const datas = rows
+                    .map(row => {
+                        self._setTitle(...Object.keys(row))
+                        return row
+                    })
+                    .map(row => {
+                        const cols = self._tableHead.map(head => self._buildData(row[head] || ""))
+                        return self._buildRows(cols.join(""))
+                    })
+                    .join("")
+
+                const heads = self._tableHead.map(col => self._buildHead(col)).join("")
+
+                return self._buildTable(heads + datas)
+            }
+
+            get _tableHead() {
+                return [...this._heads]//.sort()
+            }
+        }
+
+        document.body.innerHTML =
+            ToTable.for(testObject)
+                .setHeadStyle({ id: "someID1", className: "someClass" })
+                .build +
+            "<br/>" +
+            ToTable.for([
+                { k5: "v1", k2: "v2", },
+                { k1: "v3", k2: "v4", },
+                { k1: "v5", k2: "v6", k3: "v15", },
+                { k2: "v8", },
+                { k1: "v9", k2: "v10", k4: "v16", },
+                { k1: "v11", k2: "v12", k3: "v17", },
+                { k1: "v13", k2: "v14", },
+            ])
+                .setHeadStyle({ id: "someID2", className: "someClass" })
+                .setDataStyle({ className: "ifWant twoOrMore className" })
+                .build +
+            "<br/>"
+
+    </script>
+</body>
+
+</html>
